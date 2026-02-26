@@ -1,0 +1,12 @@
+{
+  "name": "1password-management-dev",
+  "owner": {"name": "Drew Burchfield", "url": "https://github.com/drewburchfield"},
+  "plugins": [{
+    "name": "1password-management",
+    "source": "./",
+    "description": "Proper syntax, field types, and best practices for managing credentials with 1Password CLI (op)",
+    "version": "1.0.5",
+    "author": {"name": "Drew Burchfield", "url": "https://github.com/drewburchfield"},
+    "category": "security"
+  }]
+}

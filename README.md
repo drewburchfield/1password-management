@@ -10,7 +10,11 @@ A [Claude Code](https://docs.anthropic.com/en/docs/claude-code) plugin from the 
 
 ## What it does
 
-Reference for correct `op item create` syntax, complete field type documentation, category selection guidance, and security best practices for the 1Password CLI.
+Reference for correct `op item create` / edit syntax: field types, categories, quoting rules, tagging, and notes templates for developer credentials.
+
+**Scope (current):** strongest on **item create and field-type hygiene**. Day-to-day agent patterns (`op run`, `op inject`, service accounts, multi-account auth) are only lightly covered; treat this as a create/edit cheat sheet, not a full agent secrets runtime guide.
+
+For OpenClaw SecretRef setup, use [openclaw-1password](https://github.com/drewburchfield/openclaw-1password) instead.
 
 ## Install
 

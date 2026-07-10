@@ -72,11 +72,14 @@ op run --env-file=.env.op -- npm start
 
 ```bash
 export OP_SERVICE_ACCOUNT_TOKEN="ops_..."
+export OP_BIOMETRIC_UNLOCK_ENABLED=false
+export OP_NO_AUTO_SIGNIN=true
+export OP_LOAD_DESKTOP_APP_SETTINGS=false
 op whoami
 op service-account ratelimit
 ```
 
-See `references/auth.md` for creation and TCC env vars.
+Headless block + provenance: `references/auth.md`.
 
 ## Multi-account
 

@@ -1,6 +1,6 @@
 {
   "name": "1password-management",
-  "version": "1.2.0",
+  "version": "1.2.1",
   "description": "1Password CLI (op) for agents: auth, item CRUD, secret references, op run/inject/read, service accounts",
   "author": {
     "name": "Drew Burchfield",

@@ -9,7 +9,7 @@
       "name": "1password-management",
       "source": "./",
       "description": "1Password CLI (op) for agents: auth, item CRUD, secret references, op run/inject/read, service accounts",
-      "version": "1.2.0",
+      "version": "1.2.1",
       "author": {
         "name": "Drew Burchfield",
         "url": "https://github.com/drewburchfield"

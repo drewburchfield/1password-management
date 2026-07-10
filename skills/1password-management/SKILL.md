@@ -3,20 +3,23 @@ name: 1password-management
 description: >
   Use when working with 1Password CLI (op): auth and service accounts, create/read/edit items,
   secret references, op run / op inject / op read, vaults/documents, and agent-safe credential workflows.
-version: 1.2.0
+version: 1.2.1
 ---
 
 # 1Password CLI (`op`)
 
-Credential management for agents and developers: auth, item CRUD, secret references, and process injection.
+Auth, item CRUD, secret references, and process injection for agents and developers.
 
 **Load on demand:**
-- `references/auth.md` — desktop, multi-account, service accounts, Connect, diagnose
-- `references/agent-hygiene.md` — what agents must / must not do with secrets
-- `references/item-create.md` — field types, create/edit recipes, tags, notes
-- `references/secrets-runtime.md` — `op run`, `op inject`, `op read`, env files, CI
 
-OpenClaw SecretRef / gateway setup: **openclaw-1password** plugin.
+| File | When |
+|------|------|
+| `references/auth.md` | Desktop, multi-account, SA, headless env block, Connect, diagnose |
+| `references/agent-hygiene.md` | Must / must-not for secrets in chat and git |
+| `references/item-create.md` | Field types, create/edit, tags, notes |
+| `references/secrets-runtime.md` | `op run` / `inject` / `read`, env files, CI |
+
+OpenClaw SecretRef / gateway: **openclaw-1password** plugin.
 
 ## Probe
 
@@ -26,41 +29,44 @@ op whoami
 op account list
 ```
 
-Not signed in → see `references/auth.md` (app integration or `OP_SERVICE_ACCOUNT_TOKEN`).
+Not signed in → `references/auth.md` (app integration or service account).
 
 ## Decision table
 
 | Goal | Action |
 |------|--------|
-| New API key / OAuth / DB secret | Create item (`references/item-create.md`) |
+| New API key / OAuth / DB secret | Create item (`item-create.md`) |
 | Run app with secrets | `op run` + `op://` env refs |
 | Render config | `op inject` |
 | One field in a script | `op read "op://..."` |
-| CI / agent / headless | Service account + run/inject/read |
+| CI / agent / headless | SA + headless env block (`auth.md`) |
 | Update field | `op item edit` |
 | OpenClaw gateway | openclaw-1password |
 
 ## Always-on rules
 
-1. **Quote** every field assignment: `"API_KEY[password]=..."`
-2. Field types (`[password]`, `[text]`, …) only on **custom** fields; not on `username`, `notesPlain`, `website`
+1. **Quote** field assignments: `"API_KEY[password]=..."`
+2. Field types (`[password]`, `[text]`, …) only on **custom** fields; not `username`, `notesPlain`, `website`
 3. Always pass **`--vault`**
 4. Prefer **`op run` / `op inject` / `op read`** over printing secrets into chat
-5. Never dump secrets into transcripts unless the user explicitly asks for the raw value
-6. Secrets in git: only `op://Vault/Item/field` (or inject templates), never resolved values
+5. Never dump secrets into transcripts unless the user asks for the raw value
+6. Git: only `op://Vault/Item/field` (or inject templates), never resolved values
 7. Multi-account: `--account` or `OP_ACCOUNT`
-8. Headless SA: set token + optional TCC env (see auth.md)
+8. Headless SA: full block from `auth.md` (token + biometric off + no auto signin + no desktop settings)
 
 ## Auth (summary)
 
 | Context | Method |
 |---------|--------|
-| Interactive + 1Password app | App CLI integration + unlock |
-| Agents / CI / servers | `OP_SERVICE_ACCOUNT_TOKEN` |
+| Interactive + app | App CLI integration + unlock |
+| Agents / CI / servers | `OP_SERVICE_ACCOUNT_TOKEN` + headless block |
 | Connect | `OP_CONNECT_HOST` + `OP_CONNECT_TOKEN` |
 
 ```bash
 export OP_SERVICE_ACCOUNT_TOKEN="ops_..."
+export OP_BIOMETRIC_UNLOCK_ENABLED=false
+export OP_NO_AUTO_SIGNIN=true
+export OP_LOAD_DESKTOP_APP_SETTINGS=false
 op whoami
 ```
 
@@ -94,7 +100,7 @@ op item list --vault "Dev Environments" --tags "project"
 op item get "project - service" --fields API_KEY --reveal   # only if user needs the value
 ```
 
-Default category for dev secrets: **API Credential**. Title: `{project} - {service}`. Full recipes → `references/item-create.md`.
+Default category: **API Credential**. Title: `{project} - {service}`. Recipes → `item-create.md`.
 
 Template path (no secret on argv):
 
@@ -119,7 +125,7 @@ op document create ./file.bin --title "name" --vault "Dev Environments"
 
 ```bash
 op plugin list
-op plugin init <alias>    # e.g. aws, gh — see op plugin --help
+op plugin init <alias>    # e.g. aws, gh
 ```
 
 ## Quick reference
@@ -136,6 +142,7 @@ op service-account ratelimit
 
 ## Docs
 
-- https://developer.1password.com/docs/cli/
-- https://developer.1password.com/docs/cli/secret-references/
-- https://developer.1password.com/docs/service-accounts/
+- https://www.1password.dev/cli/
+- https://www.1password.dev/cli/environment-variables
+- https://www.1password.dev/cli/secret-references/
+- https://www.1password.dev/service-accounts/

@@ -5,20 +5,21 @@
 A [Claude Code](https://docs.anthropic.com/en/docs/claude-code) plugin from the [not-my-job](https://github.com/drewburchfield/not-my-job) marketplace.
 
 ![License](https://img.shields.io/badge/license-MIT-blue)
-![Version](https://img.shields.io/badge/version-1.1.0-blue)
+![Version](https://img.shields.io/badge/version-1.2.0-blue)
 
 </div>
 
 ## What it does
 
-Full `op` workflow skill for coding agents and developers:
+1Password CLI (`op`) skill for coding agents and developers:
 
-- **Auth** — desktop integration, multi-account, service accounts for CI/agents
-- **CRUD** — create/edit/list items with correct field types, quoting, categories, tags
-- **Runtime secrets** — `op read`, `op run`, `op inject`, secret references (`op://Vault/Item/field`)
-- **Agent hygiene** — prefer run/inject over printing secrets into chat
+- Auth: desktop integration, multi-account, service accounts, Connect
+- Items: create, edit, list, get with correct field types and quoting
+- Runtime: secret references, `op read`, `op run`, `op inject`
+- Vaults, documents, shell plugins
+- Agent hygiene for safe secret handling
 
-OpenClaw SecretRef setup lives in [openclaw-1password](https://github.com/drewburchfield/openclaw-1password).
+OpenClaw SecretRef / gateway: [openclaw-1password](https://github.com/drewburchfield/openclaw-1password).
 
 ## Install
 
@@ -26,13 +27,16 @@ OpenClaw SecretRef setup lives in [openclaw-1password](https://github.com/drewbu
 claude plugins install 1password-management@not-my-job
 ```
 
-## Structure
+## Layout
 
 ```text
 skills/1password-management/
-  SKILL.md                      # always-on contract
-  references/item-create.md     # create/edit recipes
-  references/secrets-runtime.md # run / inject / SA / CI
+  SKILL.md
+  references/
+    auth.md
+    agent-hygiene.md
+    item-create.md
+    secrets-runtime.md
 ```
 
 ## License

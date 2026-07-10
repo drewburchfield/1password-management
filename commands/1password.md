@@ -1,5 +1,5 @@
 ---
-description: Proper syntax and best practices for managing credentials with 1Password CLI (op)
+description: Manage credentials with 1Password CLI (op) — auth, CRUD, run/inject/read
 disable-model-invocation: true
 ---
 

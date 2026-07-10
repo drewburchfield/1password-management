@@ -1,384 +1,159 @@
 ---
 name: 1password-management
-description: Use when interacting with 1Password CLI (op) to create, read, update, or manage credentials. Provides proper syntax, field types, best practices, and common pitfall avoidance.
+description: >
+  Use when working with 1Password CLI (op): sign-in and service accounts, create/read/edit items,
+  secret references, op run / op inject / op read, and agent-safe credential workflows.
+version: 1.1.0
 ---
 
-# 1Password CLI Management
+# 1Password CLI (`op`)
 
-Use this skill when working with 1Password CLI (`op`) for credential management.
+End-to-end credential management for agents and humans: auth, CRUD, secret references, and process injection.
 
-## When to Use This Skill
+**Deep patterns (load on demand):**
+- `references/item-create.md` — field types, create recipes, tagging, notes templates
+- `references/secrets-runtime.md` — `op run`, `op inject`, env files, CI/service accounts
 
-- Creating new items in 1Password vaults
-- Reading/retrieving credentials from 1Password
-- Updating existing 1Password items
-- Managing developer secrets and API keys
-- Organizing credentials with tags and categories
+For OpenClaw SecretRef wiring specifically, also use the **openclaw-1password** plugin.
 
-## Critical Rules
+## 0. Probe first
 
-### 1. ALWAYS Quote Field Assignments
-
-**WRONG:**
 ```bash
-op item create API_KEY[password]=abc123
+op --version
+op whoami          # account type; fails if not signed in
+op account list    # multi-account shorthands
 ```
 
-**CORRECT:**
+If not signed in: desktop app integration (Settings → Developer → Integrate with 1Password CLI) then `op signin`, or set `OP_SERVICE_ACCOUNT_TOKEN` for automation.
+
+Multi-account: `--account <shorthand|id|url>` or `OP_ACCOUNT`.
+
+## 1. Agent hygiene (always)
+
+1. Prefer **`op read`**, **`op run`**, **`op inject`** over printing secrets into chat.
+2. Never paste secret values into transcripts unless the user explicitly asks for the raw value.
+3. Prefer secret references in env files checked into git: `op://Vault/Item/field`.
+4. After revealing anything sensitive, do not echo it back unprompted.
+5. Headless / CI: use a **service account** scoped to the needed vaults (`OP_SERVICE_ACCOUNT_TOKEN`). Desktop biometric unlock is for interactive sessions.
+6. On macOS headless `op` calls that must not pop TCC dialogs, set (when using service accounts):
+   - `OP_SERVICE_ACCOUNT_TOKEN`
+   - `OP_BIOMETRIC_UNLOCK_ENABLED=false`
+   - `OP_NO_AUTO_SIGNIN=true`
+   - `OP_LOAD_DESKTOP_APP_SETTINGS=false`
+
+## 2. Auth ladder
+
+| Context | Method |
+|---------|--------|
+| Interactive Mac with 1Password app | App integration + `op signin` / biometric |
+| CI, agents, OpenClaw, servers | Service account token in env (chmod 600 file or secret store) |
+| Self-hosted Connect | `OP_CONNECT_HOST` + `OP_CONNECT_TOKEN` |
+
 ```bash
-op item create "API_KEY[password]=abc123"
+# Service account verify
+export OP_SERVICE_ACCOUNT_TOKEN="..."
+op whoami   # Type should be SERVICE_ACCOUNT
 ```
 
-**Why:** Shell glob expansion will break unquoted square brackets
+Create SA in 1Password → Developer → Service Accounts; grant vault access least-privilege.
 
-### 2. Use Proper Field Types
+## 3. Secret references (core integration)
 
-| Field Type | Use Case | JSON Type |
-|------------|----------|-----------|
-| `password` | Hidden/concealed fields (API keys, tokens) | `CONCEALED` |
-| `text` | Plain text (usernames, IDs, non-sensitive) | `STRING` |
-| `email` | Email addresses | `EMAIL` |
-| `url` | Web addresses | `URL` |
-| `date` | Dates (format: YYYY-MM-DD) | `DATE` |
-| `monthYear` | Month/year (format: YYYYMM or YYYY/MM) | `MONTH_YEAR` |
-| `phone` | Phone numbers | `PHONE` |
-| `otp` | One-time passwords (otpauth:// URI) | `OTP` |
+URI form: `op://Vault/Item/field` (names or IDs).
 
-### 3. Built-in Fields DON'T Need Field Types
-
-**Built-in fields for API Credential category:**
-- `username` - Use for usernames/account names
-- `notesPlain` - Use for notes (supports multiline)
-- `website` - Primary URL for the credential
-- `tags` - Comma-separated tags
-
-**WRONG:**
 ```bash
-"username[text]=user@example.com"
+# Single field
+op read "op://Dev Environments/myapp - API/API_KEY"
+
+# OTP
+op read "op://Private/Github/one-time password?attribute=otp"
+
+# Env for a process (preferred for apps)
+export API_KEY="op://Dev Environments/myapp - API/API_KEY"
+op run -- npm start
+
+# Config template
+echo 'token: {{ op://Dev Environments/myapp - API/API_KEY }}' | op inject
 ```
 
-**CORRECT:**
+Details: `references/secrets-runtime.md`.
+
+## 4. Create / edit items (correctness rules)
+
+**Always quote** field assignments (shell globs break `[` `]`):
+
 ```bash
-"username=user@example.com"
+op item create --category "API Credential" --title "proj - service" --vault "Dev Environments" \
+  "API_KEY[password]=secret" "website[url]=https://console.example.com"
 ```
 
-### 4. Multiline Notes - Use Literal String
+| Rule | |
+|------|--|
+| Quote every `field[type]=value` | Required |
+| Field types (`[password]`, `[text]`, …) | Custom fields only |
+| Built-ins (`username`, `notesPlain`, `website`) | No `[type]` suffix |
+| Secrets | Use `[password]` / CONCEALED |
+| Vault | Always pass `--vault` |
 
-**CORRECT:**
+Categories for dev work: **API Credential** (default), Login, Password, Secure Note, Database.
+
+Title convention: `{project} - {service}`. Tags: project, vendor, type (api/oauth/db).
+
+Full recipes (OAuth, DB, multi-field, notes templates): `references/item-create.md`.
+
+### Update
+
 ```bash
-"notesPlain=Line 1
-
-Line 2
-Line 3"
+op item edit "proj - service" "API_KEY[password]=new-value"
+op item edit "proj - service" --tags "proj,api,prod"
 ```
 
-**ALSO CORRECT (heredoc):**
+### Read / list
+
 ```bash
---notes "$(cat <<'EOF'
-Line 1
-Line 2
-Line 3
-EOF
-)"
+op item list --vault "Dev Environments" --tags "proj"
+op item get "proj - service"                    # concealed
+op item get "proj - service" --reveal           # only when needed
+op item get "proj - service" --fields API_KEY --reveal
+op item get "proj - service" --format json
 ```
 
-### 5. Security Best Practices
+Prefer `op read "op://..."` for single fields in scripts.
 
-**Categories for Developer Credentials:**
-1. `API Credential` - Best for most API keys, tokens, secrets
-2. `Password` - For simple password-only credentials
-3. `Secure Note` - For complex structured data
-4. `Login` - For web-based authentication
-
-**Tagging Strategy:**
-- Use project name as primary tag (e.g., `master_mcp`)
-- Add service/vendor tags (e.g., `google`, `slack`, `atlassian`)
-- Add purpose tags (e.g., `api`, `oauth`, `database`)
-- Add status tags if needed (e.g., `unstable`, `deprecated`)
-
-## Complete Command Patterns
-
-### Pattern 1: Simple API Key
+## 5. Templates (avoid secrets in shell history)
 
 ```bash
-op item create \
-  --category "API Credential" \
-  --title "Project - Service Name" \
-  --vault "Dev Environments" \
-  --tags "project,service,api" \
-  "API_KEY[password]=your-secret-key-here" \
-  "website[url]=https://console.service.com" \
-  "notesPlain=Brief description.
-
-Usage: What this credential is for
-Service: Container/service name
-
-To regenerate:
-1. Step one
-2. Step two"
-```
-
-### Pattern 2: OAuth Credentials
-
-```bash
-op item create \
-  --category "API Credential" \
-  --title "Project - OAuth Service" \
-  --vault "Dev Environments" \
-  --tags "project,oauth,service" \
-  "CLIENT_ID[text]=your-client-id" \
-  "CLIENT_SECRET[password]=your-client-secret" \
-  "email[email]=user@example.com" \
-  "website[url]=https://console.service.com/credentials" \
-  "notesPlain=OAuth 2.0 credentials.
-
-Services: service-name container
-Usage: API access for X, Y, Z
-Scopes: scope1, scope2
-
-To regenerate:
-1. Visit console URL
-2. Create OAuth application
-3. Download credentials"
-```
-
-### Pattern 3: Database Credentials
-
-```bash
-op item create \
-  --category "API Credential" \
-  --title "Project - Database Name" \
-  --vault "Dev Environments" \
-  --tags "project,database,postgres" \
-  "username[text]=dbuser" \
-  "password[password]=secure-db-password" \
-  "hostname[text]=localhost" \
-  "port[text]=5432" \
-  "database[text]=dbname" \
-  "website[url]=https://db-admin.example.com" \
-  "notesPlain=PostgreSQL database credentials.
-
-Services: db-container, app-container
-Usage: Application database
-
-To regenerate password:
-./scripts/generate-db-password.sh"
-```
-
-### Pattern 4: Multi-field API Credentials
-
-```bash
-op item create \
-  --category "API Credential" \
-  --title "Project - Complex Service" \
-  --vault "Dev Environments" \
-  --tags "project,service,complex" \
-  "username[text]=admin@example.com" \
-  "PRIMARY_TOKEN[password]=token-abc-123" \
-  "SECONDARY_TOKEN[password]=token-xyz-789" \
-  "API_URL[url]=https://api.service.com" \
-  "WORKSPACE_ID[text]=ws-12345" \
-  "website[url]=https://console.service.com/api" \
-  "notesPlain=Multi-credential service access.
-
-Services: service-container on port 8080
-Features: Feature 1, Feature 2
-
-Configuration file: configs/service/.env.instance
-
-To regenerate:
-1. Login to console
-2. Navigate to API section
-3. Generate new tokens"
-```
-
-## Reading Credentials
-
-### List Items in Vault
-```bash
-op item list --vault "Dev Environments" --tags "project"
-```
-
-### Get Specific Item (concealed by default)
-```bash
-op item get "master_mcp - Service Name"
-```
-
-### Reveal Secrets
-```bash
-op item get "master_mcp - Service Name" --reveal
-```
-
-### Get Specific Field
-```bash
-op item get "master_mcp - Service Name" --fields API_KEY --reveal
-```
-
-### Export as JSON
-```bash
-op item get "master_mcp - Service Name" --format json
-```
-
-## Common Pitfalls & Solutions
-
-### Pitfall 1: Forgetting Quotes
-**Error:** `no matches found: API_KEY[password]=...`
-**Solution:** Always quote field assignments
-
-### Pitfall 2: Using Field Types on Built-in Fields
-**Error:** Creates duplicate fields or unexpected behavior
-**Solution:** Only use field types (e.g., `[password]`) for custom fields
-
-### Pitfall 3: Sensitive Data in Command History
-**Problem:** Command arguments visible in process list and shell history
-**Solution:** For highly sensitive data, use JSON templates:
-```bash
-# Create template
 op item template get "API Credential" > /tmp/item.json
-
-# Edit template file with sensitive data
-# Then create from template
+# edit fields in the file, then:
 op item create --template /tmp/item.json --vault "Dev Environments"
-rm /tmp/item.json
+rm -P /tmp/item.json 2>/dev/null || rm /tmp/item.json
 ```
 
-### Pitfall 4: Wrong Category
-**Problem:** Using wrong item category loses structured fields
-**Solution:** Use these categories:
-- `API Credential` - For API keys, tokens, service credentials
-- `Login` - For website logins with username/password
-- `Password` - For standalone passwords
-- `Secure Note` - For unstructured sensitive information
-- `Database` - For database connection credentials
+## 6. Workflow decision
 
-### Pitfall 5: Missing Vault Context
-**Problem:** Item created in wrong vault
-**Solution:** Always specify `--vault "Vault Name"`
+| User wants | Do |
+|------------|-----|
+| Store a new API key | Create item (quoted fields) + notes how to regenerate |
+| Run app with secrets | `op run --` with `op://` env refs |
+| Render config file | `op inject` |
+| One secret in a script | `op read` |
+| Agent / CI | Service account + run/inject/read; no chat dumps |
+| OpenClaw gateway secrets | openclaw-1password plugin |
 
-## Metadata Best Practices
-
-### Title Naming Convention
-Format: `{project} - {service/purpose}`
-
-Examples:
-- `master_mcp - Google Search API`
-- `master_mcp - Slack Browser Tokens`
-- `myapp - Production Database`
-- `myapp - AWS S3 Credentials`
-
-### Notes Template
-```
-{Brief one-line description}
-
-Services: {container/service names}
-Usage: {what this credential enables}
-{Optional: Features, configuration, specifics}
-
-{Optional: Pricing, limits, constraints}
-
-To regenerate:
-1. {Step by step instructions}
-2. {With URLs where possible}
-```
-
-### Tag Strategy
-1. **Project tag** (required): Identifies which project owns this
-2. **Service tag** (recommended): Names the service (google, slack, aws, etc.)
-3. **Type tag** (recommended): Purpose (api, oauth, database, etc.)
-4. **Status tag** (optional): State (unstable, deprecated, staging, production)
-
-Example: `--tags "master_mcp,google,api,search"`
-
-## Integration with Environment Files
-
-When storing credentials that belong in `.env` files:
-
-1. **Create in 1Password** with structured metadata
-2. **Reference in README** how to retrieve:
-   ```bash
-   # Retrieve from 1Password
-   op item get "project - service" --fields API_KEY --reveal
-   ```
-3. **Use secret references** in scripts:
-   ```bash
-   # In .env (checked into git)
-   API_KEY=op://Dev Environments/master_mcp - Service/API_KEY
-
-   # Run with op run
-   op run -- docker-compose up
-   ```
-
-## Checklist Before Creating Item
-
-- [ ] Chosen appropriate category (usually "API Credential")
-- [ ] Title follows naming convention: `{project} - {service}`
-- [ ] Specified correct vault with `--vault`
-- [ ] All field assignments are quoted
-- [ ] Used correct field types (password for secrets, text for non-sensitive)
-- [ ] NOT using field types on built-in fields (username, notesPlain, website)
-- [ ] Added comprehensive notes with regeneration instructions
-- [ ] Added appropriate tags (project, service, type)
-- [ ] Included URLs in website field and relevant custom URL fields
-
-## Advanced: Updating Items
-
-### Add Field to Existing Item
-```bash
-op item edit "item-name" "NEW_FIELD[password]=value"
-```
-
-### Update Existing Field
-```bash
-op item edit "item-name" "API_KEY[password]=new-value"
-```
-
-### Add Tags
-```bash
-op item edit "item-name" --tags "existing,tags,new-tag"
-```
-
-## Quick Reference Card
+## 7. Quick reference
 
 ```bash
-# Create API credential
-op item create \
-  --category "API Credential" \
-  --title "{project} - {service}" \
-  --vault "Dev Environments" \
-  --tags "{project},{service},{type}" \
-  "{FIELD_NAME}[password]={secret}" \
-  "website[url]={console-url}" \
-  "notesPlain={description and regeneration steps}"
-
-# List items
-op item list --vault "Dev Environments" --tags "{project}"
-
-# Get item (hidden)
-op item get "{project} - {service}"
-
-# Get item (revealed)
-op item get "{project} - {service}" --reveal
-
-# Get specific field
-op item get "{project} - {service}" --fields {FIELD_NAME} --reveal
-
-# Update field
-op item edit "{project} - {service}" "{FIELD_NAME}[password]={new-value}"
+op whoami
+op item create --category "API Credential" --title "p - s" --vault "V" \
+  "API_KEY[password]=..." "website[url]=https://..."
+op read "op://V/p - s/API_KEY"
+op run --env-file=.env.tpl -- ./app
+op inject -i config.tpl -o config.out
+op item edit "p - s" "API_KEY[password]=..."
 ```
 
 ## Resources
 
-- **Official Docs:** https://developer.1password.com/docs/cli/
-- **Item Fields:** https://developer.1password.com/docs/cli/item-fields/
-- **Create Items:** https://developer.1password.com/docs/cli/item-create/
-- **Secret References:** https://developer.1password.com/docs/cli/secret-references/
-
-## Summary
-
-When working with 1Password CLI:
-1. **Always quote** field assignments
-2. **Use field types** only for custom fields (not built-in fields)
-3. **Choose correct category** (API Credential for most dev credentials)
-4. **Include comprehensive notes** with regeneration instructions
-5. **Tag appropriately** for easy discovery
-6. **Use secret references** for secure environment variable loading
+- https://developer.1password.com/docs/cli/
+- https://developer.1password.com/docs/cli/secret-references/
+- https://developer.1password.com/docs/service-accounts/

@@ -2,8 +2,10 @@
 name: 1password-management
 description: >
   Use when working with 1Password CLI (op): auth and service accounts, create/read/edit items,
-  secret references, op run / op inject / op read, vaults/documents, and agent-safe credential workflows.
-version: 1.2.1
+  secret references, op run / op inject / op read, vaults/documents, Environments and locally
+  mounted .env files, the 1Password MCP server and agent hooks, SSH keys and Git commit signing,
+  and agent-safe credential workflows.
+version: 1.3.0
 ---
 
 # 1Password CLI (`op`)
@@ -18,10 +20,20 @@ Auth, item CRUD, secret references, and process injection for agents and develop
 | `references/agent-hygiene.md` | Must / must-not for secrets in chat and git |
 | `references/item-create.md` | Field types, create/edit, tags, notes |
 | `references/secrets-runtime.md` | `op run` / `inject` / `read`, env files, CI |
+| `references/environments.md` | Environments, mounted `.env`, MCP server config, agent hooks |
+| `references/ssh-git.md` | SSH agent, key management, Git commit signing, auth failures |
+| `references/upstream/1password-environments.md` | 1Password's own Environments-via-MCP workflow (vendored) |
 
 OpenClaw SecretRef / gateway: **openclaw-1password** plugin.
 
+**When unsure, check the docs, not memory.** 1Password publishes an LLM-readable
+index at `https://www.1password.dev/llms.txt`, every page as `<url>.md`, and the
+whole corpus at `llms-full.txt`. Fetch the index first, then the specific page.
+
 ## Probe
+
+Only when auth state is unknown or a command has already failed. Probing is not
+a first step for questions about *how* to do something — answer those directly.
 
 ```bash
 op --version
@@ -41,13 +53,17 @@ Not signed in → `references/auth.md` (app integration or service account).
 | One field in a script | `op read "op://..."` |
 | CI / agent / headless | SA + headless env block (`auth.md`) |
 | Update field | `op item edit` |
+| Project `.env` full of secrets | Environment + local mount (`environments.md`) |
+| Secrets in `mcp.json` | Wrap the server in `op run --environment` (`environments.md`) |
+| Agent should verify secrets before running | 1Password agent hook (`environments.md`) |
+| SSH auth or commit signing | `ssh-git.md` |
 | OpenClaw gateway | openclaw-1password |
 
 ## Always-on rules
 
 1. **Quote** field assignments: `"API_KEY[password]=..."`
-2. Field types (`[password]`, `[text]`, …) only on **custom** fields; not `username`, `notesPlain`, `website`
-3. Always pass **`--vault`**
+2. Field types (`[password]`, `[text]`, …) only on **custom** fields. Built-ins differ per category: check with `op item template get "<category>"`
+3. Always pass **`--vault`**; set the item website with **`--url`**, never `website[url]=`
 4. Prefer **`op run` / `op inject` / `op read`** over printing secrets into chat
 5. Never dump secrets into transcripts unless the user asks for the raw value
 6. Git: only `op://Vault/Item/field` (or inject templates), never resolved values
@@ -70,6 +86,31 @@ export OP_LOAD_DESKTOP_APP_SETTINGS=false
 op whoami
 ```
 
+## Secrets in MCP config
+
+A token in an `mcp.json` `env` block is plaintext in a file agents read. Wrap the
+server in `op run` and delete the `env` entry — `op run` injects the variable into
+the process, so re-declaring it is redundant.
+
+```json
+{
+  "mcpServers": {
+    "example": {
+      "command": "op",
+      "args": ["run", "--environment", "<environmentID>", "--",
+               "npx", "-y", "@example/mcp@latest"]
+    }
+  }
+}
+```
+
+`op run --env-file` with `op://` references works the same way when you are not
+using Environments. Putting a bare `op://` reference in the `env` block does
+**not** work: the MCP host does not resolve secret references, only `op` does.
+
+GUI-launched hosts (Claude Desktop on Mac) may not inherit your shell `$PATH`;
+use the absolute path to `op`. More in [references/environments.md](references/environments.md).
+
 ## Secret references
 
 ```
@@ -91,8 +132,8 @@ op item create \
   --title "project - service" \
   --vault "Dev Environments" \
   --tags "project,service,api" \
+  --url "https://console.example.com" \
   "API_KEY[password]=..." \
-  "website[url]=https://console.example.com" \
   "notesPlain=Usage and regenerate steps."
 
 op item edit "project - service" "API_KEY[password]=new"
@@ -142,7 +183,9 @@ op service-account ratelimit
 
 ## Docs
 
-- https://www.1password.dev/cli/
-- https://www.1password.dev/cli/environment-variables
-- https://www.1password.dev/cli/secret-references/
-- https://www.1password.dev/service-accounts/
+- https://www.1password.dev/llms.txt — LLM-readable docs index; start here
+- https://www.1password.dev/cli/reference.md — full command reference
+- https://www.1password.dev/cli/item-fields.md — built-in vs custom fields
+- https://www.1password.dev/environments/overview.md — Environments (beta)
+- https://www.1password.dev/ssh/overview.md — SSH and Git
+- https://www.1password.dev/get-started/secure-ai-access.md — securing agent secrets

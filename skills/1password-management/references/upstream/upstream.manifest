@@ -1,0 +1,9 @@
+# Vendored upstream files. Format:
+#   <repo-url> <TAB> <path-in-repo> <TAB> <dest-in-this-directory>
+#
+# Refreshed by scripts/upstream-sync.sh, which remaps cross-document links onto
+# these flat filenames. Never hand-edit anything here; our own guidance lives in
+# ../../SKILL.md and the sibling reference files.
+
+https://github.com/1Password/cursor-plugin.git	skills/1password-environments/SKILL.md	1password-environments.md
+https://github.com/1Password/cursor-plugin.git	skills/1password-environments/reference.md	1password-environments-reference.md

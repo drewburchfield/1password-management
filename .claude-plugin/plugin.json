@@ -1,7 +1,7 @@
 {
   "name": "1password-management",
-  "version": "1.2.1",
-  "description": "1Password CLI (op) for agents: auth, item CRUD, secret references, op run/inject/read, service accounts",
+  "version": "1.3.0",
+  "description": "1Password CLI (op) for agents: auth, item CRUD, secret references, op run/inject/read, service accounts, Environments, SSH & Git signing",
   "author": {
     "name": "Drew Burchfield",
     "url": "https://github.com/drewburchfield"
@@ -17,6 +17,10 @@
     "secrets",
     "op-run",
     "service-accounts",
-    "secret-references"
+    "secret-references",
+    "environments",
+    "ssh",
+    "git-signing",
+    "mcp"
   ]
 }

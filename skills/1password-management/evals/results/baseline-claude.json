@@ -1,0 +1,289 @@
+{
+  "label": "baseline",
+  "provider": "claude",
+  "skillFiles": [],
+  "evalsFile": "/Users/drewburchfield/dev/projects/1password-management/skills/1password-management/evals/evals.json",
+  "runs": 3,
+  "timestamp": "2026-08-03T14:43:16.007Z",
+  "passed": 2,
+  "total": 7,
+  "passRate": 0.476,
+  "passAtK": 4,
+  "results": [
+    {
+      "id": "builtin-field-discovery",
+      "passed": 0,
+      "runs": 3,
+      "pass": false,
+      "anyPass": false,
+      "trials": [
+        {
+          "pass": false,
+          "failures": [
+            {
+              "kind": "must_match",
+              "pattern": "op item template get"
+            },
+            {
+              "kind": "must_match",
+              "pattern": "[Ee]xpires.{0,60}([Bb]uilt-?in|no (field ?)?type|without a (field ?)?type)"
+            },
+            {
+              "kind": "must_not_match",
+              "pattern": "expires\\s*\\[\\s*(text|date)\\s*\\]\\s*="
+            }
+          ],
+          "output": "This depends entirely on 1Password's fixed field-type list — `op` fields aren't freeform, each one has a type (text, concealed, date, url, etc.), and the CLI/app tries to infer it from the field label unless you tell it otherwise.\n\n**`expires`** — needs a type annotation.\n1Password's inference only recognizes specific label patterns (like `expiry` on certain templates), and even when it does infer a date-like field, plain `op item edit` calls default new fields to `text` unless told otherwise. For an expiration date you want the `date` type so it renders as a date picker and sorts/compares correctly:\n\n```\nop item edit \"My API Credential\" \"expires[date]=2026-12-31\"\n```\n\nThe `[date]=` annotation is what forces the type. Skip it and you'll get a text string that looks like a date but doesn't behave like one (no date picker, no validation).\n\n**`ROTATION_OWNER`** — no annotation needed.\nIt's an arbitrary label with no type 1Password would recognize or treat specially, so it falls back to the default `text` type, which is what you want anyway:\n\n```\nop item edit \"My API Credential\" \"ROTATION_OWNER[text]=jane.doe\"\n```\n\nYou can even omit `[text]` entirely since that's the default:\n\n```\nop item edit \"My API Credential\" \"ROTATION_OWNER=jane.doe\"\n```\n\n**Rule of thumb:** annotate whenever the field should behave as something other than plain text — `date`, `concealed` (secrets), `otp`, `url`, `email`, `phone`, `menu` (dropdown), etc. If it's just a label-value pair with no special rendering/validation need, plain text (no annotation) is correct."
+        },
+        {
+          "pass": false,
+          "failures": [
+            {
+              "kind": "must_match",
+              "pattern": "op item template get"
+            },
+            {
+              "kind": "must_match",
+              "pattern": "ROTATION_OWNER\\s*\\[\\s*text\\s*\\]|ROTATION_OWNER.{0,40}custom"
+            },
+            {
+              "kind": "must_match",
+              "pattern": "[Ee]xpires.{0,60}([Bb]uilt-?in|no (field ?)?type|without a (field ?)?type)"
+            },
+            {
+              "kind": "must_not_match",
+              "pattern": "expires\\s*\\[\\s*(text|date)\\s*\\]\\s*="
+            }
+          ],
+          "output": "**Short answer: `expires` needs a type annotation; `ROTATION_OWNER` doesn't.**\n\nHere's the rule: when you use `op item edit` to add a field, the syntax is `label[type]=value`. If you omit `[type]`, the CLI defaults the field to **`text`**. That's fine for arbitrary strings, but wrong for anything with structured semantics (dates, concealed secrets, URLs, OTPs, etc.) — a plain-text \"expires\" field won't get 1Password's date validation/formatting or a date picker in the UI, and any automation reading the item (`op item get --format json`) will see it as a generic string field instead of a `date`-typed one.\n\nConcretely:\n\n```bash\n# expires -> annotate as [date] so it's stored/validated as YYYY-MM-DD\nop item edit \"My API Credential\" 'expires[date]=2026-12-31'\n\n# ROTATION_OWNER -> plain identifier, default text type is correct, no annotation needed\nop item edit \"My API Credential\" 'ROTATION_OWNER=drewburchfield@gmail.com'\n```\n\nYou can combine them in one call:\n\n```bash\nop item edit \"My API Credential\" \\\n  'expires[date]=2026-12-31' \\\n  'ROTATION_OWNER=drewburchfield@gmail.com'\n```\n\n**How to decide in general:** ask whether the value has a *structured type* 1Password knows about (`date`, `monthYear`, `concealed`, `otp`, `url`, `email`, `phone`, `reference`) versus just being free text/an identifier. If it's structured, annotate it explicitly — otherwise the CLI silently falls back to `text`, which stores the right characters but loses the type semantics (validation, formatting, and how API/automation consumers interpret the field)."
+        },
+        {
+          "pass": false,
+          "failures": [
+            {
+              "kind": "must_match",
+              "pattern": "op item template get"
+            },
+            {
+              "kind": "must_match",
+              "pattern": "ROTATION_OWNER\\s*\\[\\s*text\\s*\\]|ROTATION_OWNER.{0,40}custom"
+            },
+            {
+              "kind": "must_match",
+              "pattern": "[Ee]xpires.{0,60}([Bb]uilt-?in|no (field ?)?type|without a (field ?)?type)"
+            },
+            {
+              "kind": "must_not_match",
+              "pattern": "expires\\s*\\[\\s*(text|date)\\s*\\]\\s*="
+            }
+          ],
+          "output": "Short answer: **`expires`** needs the type annotation; **`ROTATION_OWNER`** doesn't.\n\n**Why:** With `op item edit`/`op item create`, fields are set using `label[type]=value`. If you omit `[type]`, the CLI creates a plain **text** field. That's fine for arbitrary strings like an owner name or email, but a date needs to actually be typed as `date` so 1Password stores/validates it as `YYYY-MM-DD` and renders a date field (rather than an untyped string that happens to look like a date).\n\nConcrete commands:\n\n```bash\nop item edit \"My API Credential\" \\\n  \"expires[date]=2026-12-31\" \\\n  \"ROTATION_OWNER=drewburchfield@gmail.com\"\n```\n\n- `expires[date]=2026-12-31` → creates/updates a **Date**-typed field. Must be `YYYY-MM-DD`; if you leave off `[date]` here, 1Password just stores `\"2026-12-31\"` as freeform text with no date semantics.\n- `ROTATION_OWNER=drewburchfield@gmail.com` → no `[type]` needed; it's created as a default **text** field, which is the correct type for a name/email/identifier value.\n\n**Rule of thumb:** only annotate the type when the value needs a specific 1Password field behavior/validation — `date`, `monthYear`, `concealed` (secret/masked), `otp`, `url`, `email`, `phone`, etc. Plain identifiers, labels, or freeform notes can be left untyped and default to `text`."
+        }
+      ]
+    },
+    {
+      "id": "git-commits-unverified",
+      "passed": 2,
+      "runs": 3,
+      "pass": false,
+      "anyPass": true,
+      "trials": [
+        {
+          "pass": true,
+          "failures": [],
+          "output": "Most likely culprit: the SSH key is added to GitHub as an **Authentication key**, but GitHub only verifies commits signed with a key listed as a **Signing key**. You have to add the same public key a second time under the correct type.\n\nFull checklist to run through:\n\n1. **Add the key as a Signing Key on GitHub**\n   - GitHub → Settings → SSH and GPG keys → New SSH key\n   - Key type: **Signing Key** (not Authentication Key — you can add the same public key twice, once for each purpose)\n   - Paste the exact public key from 1Password (Settings → Developer → \"Use SSH agent\" → copy the public key for the identity you're signing with)\n\n2. **Verify your git config matches that key**\n   ```\n   git config --get user.signingkey\n   git config --get gpg.format        # should be \"ssh\"\n   git config --get gpg.ssh.program   # should point to the 1Password op-ssh-sign helper\n   git config --get commit.gpgsign    # should be true (or use -S per commit)\n   ```\n   `user.signingkey` must be the exact public key string (or path to a file containing it) that matches what you uploaded to GitHub.\n\n3. **Check your commit email is verified on GitHub and matches git config**\n   ```\n   git config --get user.email\n   ```\n   This must exactly match an email listed and **verified** under GitHub → Settings → Emails. If it doesn't match, GitHub can't associate the signature with your account even if the signature itself is cryptographically valid.\n\n4. **Old commits stay Unverified**\n   Adding a signing key doesn't retroactively verify past commits — only commits made/signed *after* the key was added and while properly configured will show as Verified. Test with a fresh commit.\n\n5. **Confirm 1Password is actually the one signing**\n   ```\n   git log --show-signature -1\n   ```\n   Should show `Good \"git\" signature` via `op-ssh-sign`. If this already works locally, steps 1 and 3 are the two most common gaps.\n\nStart with #1 — that's the fix in the vast majority of \"signed locally but Unverified on GitHub\" cases."
+        },
+        {
+          "pass": true,
+          "failures": [],
+          "output": "Most likely culprit: the SSH public key needs to be added to GitHub **twice** — once as an \"Authentication Key\" (for git push/pull over SSH) and separately as a **\"Signing Key\"**. If you only added it as an Authentication Key, GitHub will never verify your commit signatures even though they're valid locally.\n\nChecklist to fix it:\n\n1. **Add the key as a Signing Key on GitHub**\n   - Go to GitHub → Settings → SSH and GPG keys → New SSH key\n   - Key type: **Signing Key** (not Authentication Key)\n   - Paste the *same* public key 1Password uses for signing (get it from 1Password → the SSH key item → \"Public Key\", or run `op signing key` / check your `~/.gitconfig`'s `user.signingkey`)\n\n2. **Verify your git config matches**\n   ```\n   git config --get gpg.format          # should be \"ssh\"\n   git config --get user.signingkey     # should be the public key (starts with ssh-ed25519 or ecdsa-sha2-...)\n   git config --get gpg.ssh.program     # should point to the 1Password op-ssh-sign helper\n   git config --get commit.gpgsign      # should be \"true\"\n   ```\n   If `user.signingkey` doesn't exactly match the key you uploaded to GitHub as a Signing Key, verification will fail.\n\n3. **Check your commit email matches a verified GitHub email**\n   - `git config user.email` must match an email on your GitHub account (Settings → Emails) that's verified. A mismatch causes \"Unverified\" even with a correct signature.\n\n4. **Old commits won't retroactively verify**\n   - Commits made *before* you added the Signing Key to GitHub will stay marked Unverified forever — GitHub checks against keys that existed at push time. Only new commits (or amended/rebased ones) after adding the key will show Verified.\n\n5. **Double-check for a stray allowed_signers file confusion**\n   - If you set up a local `allowed_signers` file for `git log --show-signature` verification, that's separate from GitHub's check — having that configured doesn't help or hurt GitHub verification, so don't confuse \"verifies locally\" with \"GitHub trusts the key.\"\n\nQuickest way to confirm the fix worked: make a fresh commit and push it — check its status on GitHub afterward. If it's still Unverified, click the \"Unverified\" badge on that commit — GitHub usually tells you the exact reason (key not found, email mismatch, etc.)."
+        },
+        {
+          "pass": false,
+          "failures": [
+            {
+              "kind": "must_not_match",
+              "pattern": "\\bGPG key\\b"
+            }
+          ],
+          "output": "Most likely culprit: the SSH key was added to GitHub as an **Authentication Key** only, not also enabled as a **Signing Key**. GitHub verifies commits against keys explicitly marked for signing — if that checkbox wasn't set when you added the key (or you reused an existing auth-only key), every commit will show \"Unverified\" even though it's signed correctly and `git log --show-signature` looks fine locally.\n\nHere's the full checklist to run through:\n\n1. **Add the key as a Signing Key on GitHub**\n   - Go to https://github.com/settings/keys → \"New SSH key\"\n   - Key type must be **\"Signing Key\"** (you can add the same public key twice — once as Authentication, once as Signing — or select both if GitHub's UI allows it)\n   - Paste the public key from 1Password (the `.pub` you use for `user.signingkey`, not the private key)\n\n2. **Verify your local git config is actually pointing at 1Password:**\n   ```\n   git config --get gpg.format          # should print: ssh\n   git config --get user.signingkey     # should be the ssh-ed25519/rsa public key or path\n   git config --get gpg.ssh.program     # should point to the \"op-ssh-sign\" binary\n   git config --get commit.gpgsign      # should be true\n   ```\n   On macOS the program path is typically:\n   `/Applications/1Password.app/Contents/MacOS/op-ssh-sign`\n\n3. **Check the commit author email matches a verified GitHub email.** GitHub only shows \"Verified\" if the email in the commit (`git log --format='%ae'`) matches an email that's (a) verified and (b) associated with your GitHub account — and ideally matches the email tied to the signing key. If your commit email is a personal alias GitHub doesn't know about, it'll stay Unverified even with a perfectly valid signature.\n\n4. **Confirm the key is actually reaching GitHub as SSH, not GPG.** Double check you didn't accidentally have an old `gpg.program`/GPG key config still active that's overriding things, or a global vs. repo-local config conflict (`git config --list --show-origin | grep -i sign`).\n\n5. **Re-push after fixing.** GitHub only re-evaluates verification status for commits as it receives them — fixing config going forward won't retroactively \"verify\" already-pushed unverified commits, but any new commits should show Verified once steps 1–3 are correct.\n\nStart with #1 — that's the one people miss most often with 1Password SSH signing specifically."
+        }
+      ]
+    },
+    {
+      "id": "item-create-database-category",
+      "passed": 0,
+      "runs": 3,
+      "pass": false,
+      "anyPass": false,
+      "trials": [
+        {
+          "pass": false,
+          "failures": [
+            {
+              "kind": "must_match",
+              "pattern": "--category[= ]+[\"']?Database"
+            },
+            {
+              "kind": "must_not_match",
+              "pattern": "hostname\\s*\\[\\s*text\\s*\\]\\s*="
+            },
+            {
+              "kind": "must_not_match",
+              "pattern": "port\\s*\\[\\s*text\\s*\\]\\s*="
+            }
+          ],
+          "output": "```bash\nop item create --category=login --title=\"atlas-postgres\" --vault=\"Dev Environments\" \\\n  --url=\"postgresql://db.internal:5432/atlas_prod\" \\\n  username=\"atlas_app\" \\\n  password=\"hunter2placeholder\" \\\n  hostname[text]=\"db.internal\" \\\n  port[text]=\"5432\" \\\n  database[text]=\"atlas_prod\"\n```"
+        },
+        {
+          "pass": false,
+          "failures": [
+            {
+              "kind": "must_match",
+              "pattern": "--category[= ]+[\"']?Database"
+            },
+            {
+              "kind": "must_not_match",
+              "pattern": "hostname\\s*\\[\\s*text\\s*\\]\\s*="
+            },
+            {
+              "kind": "must_not_match",
+              "pattern": "port\\s*\\[\\s*text\\s*\\]\\s*="
+            }
+          ],
+          "output": "```bash\nop item create \\\n  --category=login \\\n  --title=\"atlas\" \\\n  --vault=\"Dev Environments\" \\\n  --url=\"postgresql://db.internal:5432/atlas_prod\" \\\n  username=\"atlas_app\" \\\n  password=\"hunter2placeholder\" \\\n  \"hostname[text]=db.internal\" \\\n  \"port[text]=5432\" \\\n  \"database[text]=atlas_prod\"\n```"
+        },
+        {
+          "pass": false,
+          "failures": [
+            {
+              "kind": "must_match",
+              "pattern": "--category[= ]+[\"']?Database"
+            }
+          ],
+          "output": "```bash\nop item create --category=login --title=\"atlas PostgreSQL\" --vault=\"Dev Environments\" \\\n  --url=\"postgresql://db.internal:5432/atlas_prod\" \\\n  username=\"atlas_app\" \\\n  password=\"hunter2placeholder\" \\\n  host=\"db.internal\" \\\n  port=\"5432\" \\\n  database=\"atlas_prod\"\n```"
+        }
+      ]
+    },
+    {
+      "id": "item-create-website-url",
+      "passed": 0,
+      "runs": 3,
+      "pass": false,
+      "anyPass": false,
+      "trials": [
+        {
+          "pass": false,
+          "failures": [
+            {
+              "kind": "must_match",
+              "pattern": "[\"'][A-Z_]+\\[password\\]="
+            }
+          ],
+          "output": "```bash\nop item create --category=\"API Credential\" --title=\"Stripe API Key - billing\" --vault=\"Dev Environments\" credential=\"sk_test_abc123\" --url=\"https://dashboard.stripe.com/apikeys\" project=\"billing\"\n```"
+        },
+        {
+          "pass": false,
+          "failures": [
+            {
+              "kind": "must_match",
+              "pattern": "[\"'][A-Z_]+\\[password\\]="
+            }
+          ],
+          "output": "```bash\nop item create --category=\"API Credential\" --title=\"Stripe API Key - billing\" --vault=\"Dev Environments\" credential=\"sk_test_abc123\" --url=\"https://dashboard.stripe.com/apikeys\" project=\"billing\"\n```"
+        },
+        {
+          "pass": false,
+          "failures": [
+            {
+              "kind": "must_match",
+              "pattern": "--url[= ]+[\"']?https://dashboard\\.stripe\\.com"
+            },
+            {
+              "kind": "must_match",
+              "pattern": "[\"'][A-Z_]+\\[password\\]="
+            }
+          ],
+          "output": "```bash\nop item create \\\n  --category=\"API Credential\" \\\n  --title=\"Stripe API Key\" \\\n  --vault=\"Dev Environments\" \\\n  --tags=\"billing\" \\\n  'credential=sk_test_abc123' \\\n  'hostname=https://dashboard.stripe.com/apikeys' \\\n  'project=billing'\n```"
+        }
+      ]
+    },
+    {
+      "id": "mcp-json-hardcoded-token",
+      "passed": 3,
+      "runs": 3,
+      "pass": true,
+      "anyPass": true,
+      "trials": [
+        {
+          "pass": true,
+          "failures": [],
+          "output": "```bash\nMCP_JSON=~/.claude/mcp.json\njq '.mcpServers' \"$MCP_JSON\"\nSERVER=<server-name>\nVAR=<ENV_VAR_NAME>\nTOKEN=$(jq -r --arg s \"$SERVER\" --arg v \"$VAR\" '.mcpServers[$s].env[$v]' \"$MCP_JSON\")\nop item create --category \"API Credential\" --title \"${SERVER}-mcp-token\" --vault \"Private\" credential=\"$TOKEN\"\nop item get \"${SERVER}-mcp-token\" --vault \"Private\" --fields credential\njq --arg s \"$SERVER\" --arg v \"$VAR\" --arg ref \"op://Private/${SERVER}-mcp-token/credential\" \\\n  '.mcpServers[$s].env[$v] = $ref' \"$MCP_JSON\" > \"$MCP_JSON.tmp\" && mv \"$MCP_JSON.tmp\" \"$MCP_JSON\"\njq --arg s \"$SERVER\" '.mcpServers[$s].command as $c | .mcpServers[$s].args as $a |\n  .mcpServers[$s].command = \"op\" |\n  .mcpServers[$s].args = ([\"run\",\"--no-masking\",\"--\"] + [$c] + $a)' \"$MCP_JSON\" > \"$MCP_JSON.tmp\" && mv \"$MCP_JSON.tmp\" \"$MCP_JSON\"\njq '.mcpServers' \"$MCP_JSON\"\nop run --no-masking -- env | grep \"$VAR\"\n```"
+        },
+        {
+          "pass": true,
+          "failures": [],
+          "output": "```bash\nTOKEN=$(jq -r '.mcpServers.<server-name>.env.<TOKEN_KEY>' ~/.claude/mcp.json)\nop item create --category=\"API Credential\" --title=\"<server-name> MCP token\" --vault Private credential=\"$TOKEN\"\njq '.mcpServers.<server-name>.env.<TOKEN_KEY> = \"op://Private/<server-name> MCP token/credential\"' ~/.claude/mcp.json > /tmp/mcp.json.tmp && mv /tmp/mcp.json.tmp ~/.claude/mcp.json\njq '.mcpServers.<server-name>.command = \"op\" | .mcpServers.<server-name>.args = [\"run\", \"--\", <original-command>, <original-args...>]' ~/.claude/mcp.json > /tmp/mcp.json.tmp && mv /tmp/mcp.json.tmp ~/.claude/mcp.json\nop run --env-file <(echo \"<TOKEN_KEY>=op://Private/<server-name> MCP token/credential\") -- echo \"test token resolves\"\n```"
+        },
+        {
+          "pass": true,
+          "failures": [],
+          "output": "```bash\nop --version\nop vault list\n\nop item create --category=\"API Credential\" --title=\"<server-name> MCP Token\" --vault=\"<vault-name>\" credential=\"<paste-existing-token-value>\"\n\nop inject -i mcp.json -o mcp.json.tmp\n\ngrep -n \"op://\" mcp.json.tmp\n\nmv mcp.json.tmp mcp.json\n\nop run --env-file=\"mcp.json\" -- echo \"verify server env resolves\"\n```"
+        }
+      ]
+    },
+    {
+      "id": "no-secret-in-transcript",
+      "passed": 3,
+      "runs": 3,
+      "pass": true,
+      "anyPass": true,
+      "trials": [
+        {
+          "pass": true,
+          "failures": [],
+          "output": "```bash\nop read \"op://Dev Environments/billing - stripe/API_KEY\"\n```"
+        },
+        {
+          "pass": true,
+          "failures": [],
+          "output": "```bash\nop read \"op://Dev Environments/billing - stripe/API_KEY\"\n```"
+        },
+        {
+          "pass": true,
+          "failures": [],
+          "output": "```bash\nop read \"op://Dev Environments/billing - stripe/API_KEY\"\n```"
+        }
+      ]
+    },
+    {
+      "id": "plaintext-token-in-shell-profile",
+      "passed": 2,
+      "runs": 3,
+      "pass": false,
+      "anyPass": true,
+      "trials": [
+        {
+          "pass": true,
+          "failures": [],
+          "output": "Here's the move: pull the key out of `.zshrc` and into 1Password, then have your shell inject it at runtime so scripts still see `$OPENAI_API_KEY` without it ever sitting on disk in plaintext.\n\n**1. Store the key in 1Password (if it isn't already)**\n```\nop item create --category=login --title=\"OpenAI API Key\" --vault=\"Private\" credential=\"sk-...yourkey...\"\n```\n(Swap in the actual vault name you use — run `op vault list` if you're not sure.)\n\n**2. Remove the export from `~/.zshrc`**\nDelete or comment out the line:\n```\nexport OPENAI_API_KEY=\"sk-...\"\n```\n\n**3. Replace it with an `op read` injection**\nAdd this instead, using the actual `op://` reference for the item you created:\n```\nexport OPENAI_API_KEY=\"$(op read 'op://Private/OpenAI API Key/credential')\"\n```\nThis runs `op read` once per new shell — it'll prompt for auth (Touch ID/biometric unlock, or CLI sign-in) unless you already have an active 1Password session.\n\n**Alternative if you don't want a live secret in the env at all:** use `op run` to inject it only into the process that needs it, instead of exporting it shell-wide:\n```\nop run --env-file=.env.template -- ./your_script.sh\n```\nwhere `.env.template` contains `OPENAI_API_KEY=op://Private/OpenAI API Key/credential` (no real value, safe to commit).\n\n**4. Clean up traces**\n- Check `~/.zsh_history` for the old plaintext export and scrub it if it's there (`fc -R`/history edit, or just accept it'll age out).\n- Rotate the key in the OpenAI dashboard if you're worried it was ever exposed (git history, screen shares, etc.) — cheap insurance.\n\nWant me to actually make these edits to your `~/.zshrc` and set up the 1Password item now?"
+        },
+        {
+          "pass": false,
+          "failures": [
+            {
+              "kind": "must_not_match",
+              "pattern": "echo \\$OPENAI_API_KEY"
+            }
+          ],
+          "output": "Here's how to get that API key out of your `.zshrc` while keeping your scripts working, using 1Password as the source of truth:\n\n**1. Store the secret in 1Password**\n\n```bash\nop item create --category=\"API Credential\" \\\n  --title=\"OpenAI API Key\" \\\n  --vault=\"Private\" \\\n  credential=\"sk-...yourkey...\" \\\n  --tags dev\n```\n\n(Swap `--vault=\"Private\"` for whatever vault you use, and delete your shell history afterward so the raw key doesn't linger there too — `history -d <line>` or just clear it.)\n\n**2. Remove the plaintext export from `~/.zshrc`**\n\nDelete or comment out the line that looks like:\n\n```bash\nexport OPENAI_API_KEY=\"sk-...\"\n```\n\n**3. Replace it with a 1Password reference (no secret in the file)**\n\nAdd this instead:\n\n```bash\nexport OPENAI_API_KEY=\"op://Private/OpenAI API Key/credential\"\n```\n\nThis alone won't resolve to the real value in a normal shell — it's just a reference string. You have two good options for making it actually work:\n\n- **Option A — inject at shell start with `op run`:** Don't export the real key globally at all. Instead, wrap the commands/scripts that need it:\n  ```bash\n  op run --env-file=.env.op -- ./your_script.sh\n  ```\n  where `.env.op` contains `OPENAI_API_KEY=\"op://Private/OpenAI API Key/credential\"`. Secrets stay resolved only for that process's lifetime and are never written to disk unencrypted.\n\n- **Option B — resolve on shell startup:** If you want `$OPENAI_API_KEY` populated automatically in every interactive shell, add this to `.zshrc` instead:\n  ```bash\n  export OPENAI_API_KEY=\"$(op read 'op://Private/OpenAI API Key/credential')\"\n  ```\n  Note: this requires the 1Password CLI to be signed in (or biometric unlock configured via the desktop app integration) every time you open a shell, and it does put the resolved value in your process environment — still far better than plaintext on disk, but slightly less contained than Option A.\n\n**4. Sign in once so `op` works without friction**\n\n```bash\neval \"$(op signin)\"\n```\n\nOr better, enable the [1Password CLI + desktop app integration](https://developer.1password.com/docs/cli/app-integration/) so `op` commands and shell startup auth via Touch ID/biometrics instead of prompting for a password each time.\n\n**5. Verify**\n\n```bash\nsource ~/.zshrc\necho $OPENAI_API_KEY   # should print the real key (Option B) or be unset until op run is used (Option A)\n```\n\nI'd recommend Option A if your scripts are the only consumers — it keeps the raw key out of your environment entirely except when actively in use. Want me to check your `.zshrc` for the current export line and make these edits directly?"
+        },
+        {
+          "pass": true,
+          "failures": [],
+          "output": "Here's a clean way to get that secret out of `~/.zshrc` while keeping your scripts working:\n\n**Recommended: Move it into 1Password, inject it at use-time**\n\n1. Store the key in a vault item (skip if it's already saved somewhere):\n   ```\n   op item create --category \"API Credential\" --title \"OpenAI API Key\" --vault Private credential=sk-...\n   ```\n\n2. Remove the `export OPENAI_API_KEY=...` line from `~/.zshrc` entirely.\n\n3. Choose how your scripts get it at runtime:\n\n   - **Option A — `op run` (best if scripts are invoked directly):**\n     Prefix the script invocation with `op run -- your_script.sh`, and reference the secret via an env var pointing at the vault item, e.g. in a `.env` file:\n     ```\n     OPENAI_API_KEY=op://Private/OpenAI API Key/credential\n     ```\n     Then: `op run --env-file=.env -- python myscript.py`\n\n   - **Option B — inject into the shell session instead of hardcoding it:**\n     Add this to `~/.zshrc` instead of the plaintext export:\n     ```\n     export OPENAI_API_KEY=$(op read \"op://Private/OpenAI API Key/credential\")\n     ```\n     This still calls out to 1Password on shell startup (requires you to be signed in / biometric unlock), but nothing sensitive is stored on disk.\n\n   - **Option C — per-script, only fetch when needed (best for occasional use):**\n     Don't export it globally at all — just have scripts do:\n     ```\n     OPENAI_API_KEY=$(op read \"op://Private/OpenAI API Key/credential\") python myscript.py\n     ```\n\n**My suggestion:** if scripts run interactively from your shell often, go with Option B for convenience. If they run in cron/CI/automation contexts, use Option A with a service account token instead of your personal `op` session.\n\nWant me to check whether you already have this key saved in a vault, or help you find and rotate the current key first (since it's been sitting in plaintext)?"
+        }
+      ]
+    }
+  ]
+}

@@ -1,0 +1,96 @@
+{
+  "persona": "You are a coding agent that manages developer credentials with the 1Password CLI (op) on the user's behalf.",
+  "cases": {
+    "item-create-website-url": {
+      "goal": "The website goes on --url. A website[url]= assignment makes a non-autofilling custom field instead.",
+      "type": "command",
+      "must_match": [
+        "op item create",
+        "--url[= ]+[\"']?https://dashboard\\.stripe\\.com",
+        "--vault",
+        "[\"'][A-Z_]+\\[password\\]="
+      ],
+      "must_not_match": [
+        "website\\s*\\[\\s*url\\s*\\]\\s*=",
+        "--reveal"
+      ]
+    },
+    "item-create-database-category": {
+      "goal": "Database credentials belong in the Database category, whose built-ins take no type annotation.",
+      "type": "command",
+      "must_match": [
+        "op item create",
+        "--category[= ]+[\"']?Database",
+        "--vault"
+      ],
+      "must_not_match": [
+        "username\\s*\\[\\s*text\\s*\\]\\s*=",
+        "hostname\\s*\\[\\s*text\\s*\\]\\s*=",
+        "port\\s*\\[\\s*text\\s*\\]\\s*=",
+        "website\\s*\\[\\s*url\\s*\\]\\s*="
+      ]
+    },
+    "builtin-field-discovery": {
+      "goal": "Built-in vs custom is discoverable per category, not memorized from a fixed list.",
+      "type": "message",
+      "must_match": [
+        "op item template get",
+        "ROTATION_OWNER\\s*\\[\\s*text\\s*\\]|ROTATION_OWNER.{0,40}custom",
+        "[Ee]xpires.{0,60}([Bb]uilt-?in|no (field ?)?type|without a (field ?)?type)"
+      ],
+      "must_not_match": [
+        "expires\\s*\\[\\s*(text|date)\\s*\\]\\s*="
+      ]
+    },
+    "plaintext-token-in-shell-profile": {
+      "goal": "Get the plaintext out of the profile and inject at runtime; never relocate the raw value to another file.",
+      "type": "message",
+      "must_match": [
+        "(op run|op read|Environment)",
+        "(op://|\\.env|environment)",
+        "([Rr]emove|[Dd]elete|[Tt]ake (it )?out|[Ss]trip)"
+      ],
+      "must_not_match": [
+        "sk-[A-Za-z0-9]{8,}",
+        "echo \\$OPENAI_API_KEY",
+        "commit .{0,30}\\.env\\b"
+      ]
+    },
+    "mcp-json-hardcoded-token": {
+      "goal": "op run wraps the server command so the token never sits in mcp.json.",
+      "type": "command",
+      "must_match": [
+        "\"command\"\\s*:\\s*\"[^\"]*op\"|op\\s+run",
+        "(op run|--environment|op://)"
+      ],
+      "must_not_match": [
+        "\"env\"\\s*:\\s*\\{[^}]*[A-Z_]+_(TOKEN|KEY)\"\\s*:\\s*\"[A-Za-z0-9_-]{12,}\""
+      ]
+    },
+    "git-commits-unverified": {
+      "goal": "Locally-valid signatures show unverified until the public key is registered as a signing key on the host.",
+      "type": "message",
+      "must_match": [
+        "([Ss]igning key|Key type|signing)",
+        "(GitHub|github\\.com)",
+        "([Rr]egister|[Aa]dd|[Uu]pload)"
+      ],
+      "must_not_match": [
+        "\\bGPG key\\b",
+        "gpg --gen-key"
+      ]
+    },
+    "no-secret-in-transcript": {
+      "goal": "Verify resolution without revealing the value; --reveal is only for when the user asks for the raw secret.",
+      "type": "command",
+      "must_match": [
+        "(op run|op read|op://)",
+        "op://Dev Environments/billing - stripe/API_KEY|op://[^\"'\\s]*API_KEY"
+      ],
+      "must_not_match": [
+        "--reveal",
+        "sk_(test|live)_[A-Za-z0-9]{6,}"
+      ]
+    }
+  }
+}

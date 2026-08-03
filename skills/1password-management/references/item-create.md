@@ -5,9 +5,37 @@ Load when creating or restructuring 1Password items.
 ## Critical rules
 
 1. **Always quote** field assignments: `"API_KEY[password]=..."`
-2. Field types only on **custom** fields, not built-ins (`username`, `notesPlain`, `website`)
+2. Field types only on **custom** fields. Never annotate a built-in field.
 3. Always pass `--vault`
-4. Prefer category **API Credential** for developer secrets
+4. Set the item's website with **`--url`**, not a `website[url]=` assignment
+5. Pick the category whose built-ins already fit the secret (Database, SSH Key, Login) before defaulting to API Credential
+
+## Built-in vs custom fields
+
+Built-ins differ per category, so check before assigning rather than guessing:
+
+```bash
+op item template get "API Credential" | jq -r '.fields[].id'
+```
+
+| Category | Built-in field ids |
+|----------|--------------------|
+| API Credential | `notesPlain` `username` `credential` `type` `filename` `validFrom` `expires` `hostname` |
+| Database | `notesPlain` `database_type` `hostname` `port` `database` `username` `password` `sid` `alias` `options` |
+| Login | `username` `password` `notesPlain` |
+
+Assign a built-in by its `id` with **no** type annotation:
+
+```bash
+"username=dbuser"          # correct: built-in
+"username[text]=dbuser"    # wrong: creates a custom field shadowing the built-in
+```
+
+Anything not in the template is a custom field and **does** take a type: `"API_KEY[password]=..."`.
+
+### Why `--url`, not `website[url]`
+
+`website` is not a built-in on any of these categories, so `website[url]=` silently creates a custom URL field. Per 1Password's docs the `url` field type is "not used for autofill behavior" — use the `--url` flag to set the website 1Password suggests and fills for Login, Password, and API Credential items.
 
 ## Field types
 
@@ -30,8 +58,8 @@ op item create \
   --title "Project - Service Name" \
   --vault "Dev Environments" \
   --tags "project,service,api" \
+  --url "https://console.service.com" \
   "API_KEY[password]=your-secret-key-here" \
-  "website[url]=https://console.service.com" \
   "notesPlain=Brief description.
 
 Usage: What this credential is for
@@ -50,10 +78,10 @@ op item create \
   --title "Project - OAuth Service" \
   --vault "Dev Environments" \
   --tags "project,oauth,service" \
+  --url "https://console.service.com/credentials" \
   "CLIENT_ID[text]=your-client-id" \
   "CLIENT_SECRET[password]=your-client-secret" \
   "email[email]=user@example.com" \
-  "website[url]=https://console.service.com/credentials" \
   "notesPlain=OAuth 2.0 credentials.
 
 Scopes: scope1, scope2
@@ -64,16 +92,17 @@ To regenerate: console → create OAuth app → download credentials"
 
 ```bash
 op item create \
-  --category "API Credential" \
+  --category "Database" \
   --title "Project - Database Name" \
   --vault "Dev Environments" \
   --tags "project,database,postgres" \
-  "username[text]=dbuser" \
-  "password[password]=secure-db-password" \
-  "hostname[text]=localhost" \
-  "port[text]=5432" \
-  "database[text]=dbname" \
-  "website[url]=https://db-admin.example.com" \
+  --url "https://db-admin.example.com" \
+  "database_type=postgresql" \
+  "username=dbuser" \
+  "password=secure-db-password" \
+  "hostname=localhost" \
+  "port=5432" \
+  "database=dbname" \
   "notesPlain=PostgreSQL credentials for app/db containers."
 ```
 
@@ -85,12 +114,12 @@ op item create \
   --title "Project - Complex Service" \
   --vault "Dev Environments" \
   --tags "project,service,complex" \
-  "username[text]=admin@example.com" \
+  --url "https://console.service.com/api" \
+  "username=admin@example.com" \
   "PRIMARY_TOKEN[password]=token-abc-123" \
   "SECONDARY_TOKEN[password]=token-xyz-789" \
   "API_URL[url]=https://api.service.com" \
   "WORKSPACE_ID[text]=ws-12345" \
-  "website[url]=https://console.service.com/api" \
   "notesPlain=Multi-credential service access."
 ```
 
@@ -152,7 +181,8 @@ rm -P /tmp/item.json 2>/dev/null || rm /tmp/item.json
 - [ ] Title `{project} - {service}`
 - [ ] `--vault`
 - [ ] All field assignments quoted
-- [ ] Types only on custom fields
+- [ ] Types only on custom fields (check `op item template get`)
+- [ ] Website via `--url`, not `website[url]=`
 - [ ] Secrets as `[password]`
 - [ ] Notes with regenerate steps
 - [ ] Tags: project, service, type

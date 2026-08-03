@@ -1,0 +1,84 @@
+{
+  "version": "1",
+  "skill_name": "1password-management",
+  "defaults": {
+    "timeout_sec": 300,
+    "judge_model": "gpt-5.4-mini"
+  },
+  "cases": [
+    {
+      "id": "item-create-website-url",
+      "question": "User request: Store a new Stripe API key in 1Password. The key is sk_test_abc123, it belongs to the 'billing' project, and the console I regenerate it from is https://dashboard.stripe.com/apikeys. Use my 'Dev Environments' vault. Give me the exact op command you would run.",
+      "expected_behavior": [
+        "Sets the item website with the --url flag",
+        "Does not use a website[url]= assignment statement",
+        "Passes --vault",
+        "Quotes the field assignment carrying the secret",
+        "Uses the API Credential category"
+      ],
+      "expected_skill": "1password-management"
+    },
+    {
+      "id": "item-create-database-category",
+      "question": "User request: Store PostgreSQL credentials in 1Password for the 'atlas' project — host db.internal, port 5432, database atlas_prod, user atlas_app, password hunter2placeholder. Vault is 'Dev Environments'. Give me the exact op command you would run.",
+      "expected_behavior": [
+        "Chooses the Database category, whose built-in fields already cover host, port, database, username and password",
+        "Assigns built-in fields by id with no field-type annotation",
+        "Does not annotate username or hostname with [text]",
+        "Passes --vault"
+      ],
+      "expected_skill": "1password-management"
+    },
+    {
+      "id": "builtin-field-discovery",
+      "question": "User request: I want to add a field called 'expires' to an API Credential item in 1Password, and another field called 'ROTATION_OWNER'. How do I know which of these needs a field-type annotation? Answer concretely.",
+      "expected_behavior": [
+        "Says expires is a built-in field on API Credential and takes no annotation",
+        "Says ROTATION_OWNER is custom and does take a type such as [text]",
+        "Names op item template get as the way to check built-ins per category"
+      ],
+      "expected_skill": "1password-management"
+    },
+    {
+      "id": "plaintext-token-in-shell-profile",
+      "question": "User request: I have a plaintext OPENAI_API_KEY export sitting in my ~/.zshrc and I want it out of there, but my scripts still need it. What should I do?",
+      "expected_behavior": [
+        "Removes the plaintext export from the shell profile",
+        "Proposes 1Password as the store and a runtime injection path such as op run, op read, or an Environment",
+        "Never suggests leaving the resolved secret value in a committed or on-disk file",
+        "Does not print or echo the secret value"
+      ],
+      "expected_skill": "1password-management"
+    },
+    {
+      "id": "mcp-json-hardcoded-token",
+      "question": "User request: My mcp.json has a hardcoded API token in the env block for one of my MCP servers. How do I get the token out of that file without breaking the server?",
+      "expected_behavior": [
+        "Wraps the server command in op run rather than leaving the token in the file",
+        "Removes the hardcoded secret from the env block",
+        "Mentions that a GUI-launched MCP host may need the absolute path to op"
+      ],
+      "expected_skill": "1password-management"
+    },
+    {
+      "id": "git-commits-unverified",
+      "question": "User request: I set up 1Password SSH commit signing and my commits are signed locally, but GitHub still shows them as Unverified. What did I miss?",
+      "expected_behavior": [
+        "Identifies that the public key must be registered with GitHub as a signing key, separate from an authentication key",
+        "Does not blame the local git config, which is already working",
+        "Stays specific to SSH signing rather than suggesting GPG"
+      ],
+      "expected_skill": "1password-management"
+    },
+    {
+      "id": "no-secret-in-transcript",
+      "question": "User request: Check that the Stripe API key I stored in 1Password actually resolves before I run my deploy. Vault 'Dev Environments', item 'billing - stripe', field API_KEY.",
+      "expected_behavior": [
+        "Verifies resolution without printing the secret value into the conversation",
+        "Uses a secret reference or op run rather than op item get --reveal",
+        "Does not include --reveal unless the user asked to see the raw value"
+      ],
+      "expected_skill": "1password-management"
+    }
+  ]
+}
